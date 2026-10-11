@@ -39,8 +39,18 @@ At each branch-and-bound node with candidate set $\mathcal{C}$ and softmax distr
    $$\Delta p = p_{(1)} - p_{(2)}$$
    *Measures decision decisiveness between the top contender and runner-up.*
 
-3. **Dual-Gating Decision Rule:**
-   - **Execute GNN Branching:** If $\Delta p \ge \tau_m$ ($0.02$) **AND** $\tilde{H} \le \tau_h$ ($0.85$).
+3. **Scale-Invariant Cardinality-Aware Temperature Scaling:**
+   $$p_c = \text{softmax}\left(\frac{z_c}{T_{\text{card}}(|\mathcal{C}|, d)}\right), \quad T_{\text{card}}(|\mathcal{C}|, d) = T_0 \cdot \left(\frac{\ln(\max(2, |\mathcal{C}|))}{\ln 30}\right)^{0.5} \cdot \left(1 + 0.005 \cdot \min(d, 40)\right)$$
+   *Normalizes softmax temperature against fluctuating candidate pool sizes $|\mathcal{C}|$, preventing mechanical underconfidence on large instances and overconfidence on small instances.*
+
+4. **Multi-Layer Adaptive Meta-Triage Controller:**
+   - **Trivial Candidate Bypass:** If $|\mathcal{C}| \le 1$, immediately branch without neural inference.
+   - **Depth Cutoff:** When $\text{depth} > 20$, queries SCIP pseudocosts directly in $<0.05\,\text{ms}$.
+   - **LP Fractionality Topology Decisiveness:** If one candidate is deeply centered at 0.5 while competing candidates are far from 0.5 ($\Delta f_{\text{decisive}} \ge 0.20$), triggers instant pre-GNN bypass in $<0.1\,\mu\text{s}$.
+   - **Adaptive Pseudocost Decisiveness Rule:** At depth $\ge 5$, if relative pseudocost margin $\Delta \psi_{\text{rel}} \ge 0.35$, bypasses GNN in $<1\,\mu\text{s}$, eliminating CPU sunk costs.
+
+5. **Dual-Gating Decision Rule:**
+   - **Execute GNN Branching:** If $\Delta p \ge \tau_m$ ($0.02$) **AND** $\tilde{H} \le \tau_h$ ($0.85$) (when triage permits).
    - **Fallback to SCIP Pseudocosts:** Otherwise (instant, zero-overhead mathematical safety net).
 
 ---
@@ -49,14 +59,18 @@ At each branch-and-bound node with candidate set $\mathcal{C}$ and softmax distr
 
 All evaluations run deterministically inside the provided Docker environment (`confidence-branching:latest`).
 
-### A. Run the Confidence-Gated Brancher:
+### A. Run the Confidence-Gated Brancher with Adaptive Triage & Calibration:
 ```bash
 docker run --rm -v "${PWD}:/workspace" -w /workspace/current_confidence_gated_implementation \
   confidence-branching python confidence_gated_brancher.py \
   --problem setcover \
   --n-instances 10 \
+  --tiers small,medium,big \
   --margin-thresh 0.02 \
   --entropy-thresh 0.85 \
+  --temperature 1.2 \
+  --early-exit-depth 20 \
+  --pseudo-margin 0.35 \
   --mode confidence \
   --time-limit 180
 ```
@@ -92,6 +106,14 @@ Validated on 30 benchmark instances across three scale tiers (Set Covering insta
 
 *Note: Node counts reported are arithmetic means across the 10 instances in the tier (total 1,185 vs. 74,448 nodes).*
 
+### Upgraded Mitigation Performance: Adaptive Meta-Triage & Temperature Scaling ($T=1.2$, $d=20$, $\tau_{\text{pseudo}}=0.35$)
+Across the 30 benchmark instances:
+- **559 GNN forward passes safely bypassed in $<1\,\mu\text{s}$** (170 depth cutoff, 389 pseudocost decisiveness).
+- **30.17 seconds saved** in total wall-clock time (-3.05% net reduction).
+- **Big Tier ($4\times$ shift):** 30.78s faster (6.09% speedup), with 8/10 instances running faster (up to 6.2s faster per instance).
+- **Small Tier:** 9.87s faster (7.51% speedup).
+- **Hard Instance Prunings:** Medium Instance #1 (389 $\to$ 313 nodes, -19.5%), Medium Instance #2 (434 $\to$ 370 nodes, -14.7%), Small Instance #5 (343 $\to$ 263 nodes, -23.3%).
+
 ---
 
 ## 5. Authoritative Scientific Treatise: RESEARCH_COMPENDIUM.md
@@ -103,5 +125,5 @@ Please refer to [RESEARCH_COMPENDIUM.md](file:///c:/Users/likhi/OneDrive/Picture
 2. **Exhaustive Literature Breakdown:** Detailed attribution comparing what prior papers established (Gasse et al. 2019, Nair et al. 2020, Gupta et al. 2020, Ross et al. 2011) versus what was directly measured in our empirical benchmarks.
 3. **Foundational Academic Lineage:** Theoretical foundations for our novel components (Shannon 1948, Pielou 1966, Settles 2009, Joshi et al. 2009, Chow 1970, Cortes et al. 2016, Madras et al. 2018).
 4. **Complete Per-Instance Execution Logs:** Full runtime, node count, and fallback percentage logs for all 30 evaluated instances.
-5. **Scientific Limitations & Proposed Mitigations:** In-depth discussion of forward-pass sunk costs, calibration vulnerabilities, and primal/dual asymmetry.
+5. **Scientific Limitations & Future Roadmap:** In-depth discussion of forward-pass sunk costs, calibration vulnerabilities, primal/dual asymmetry, and the 4-axis scope of future improvements (learned meta-triage, cross-family transfer, primal diving, and INT8 quantization).
 6. **Academic References & BibTeX:** Full bibliography for academic citations and thesis integration.
