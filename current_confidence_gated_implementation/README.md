@@ -71,10 +71,12 @@ docker run --rm -v "${PWD}:/workspace" -w /workspace/current_confidence_gated_im
   --time-limit 180
 ```
 
-### C. Available CLI Modes:
-- `--mode confidence`: Runs the proposed Dual Confidence-Gated Brancher.
-- `--mode pure_gnn`: Runs the un-gated pure GNN policy (unconditional argmax).
-- `--mode pure_pseudocost`: Runs pure pseudocost heuristic for ablation.
+### C. Advanced Mode Flags (Addressing Limitations 3 & 4):
+- `--quantize-int8`: Applies PyTorch INT8 dynamic quantization to the GCNN linear modules for CPU acceleration and $4\times$ smaller memory footprint.
+- `--candidate-topk 50`: Restricts candidate logit evaluation to the Top-$K$ candidates by pseudocosts, enforcing an $\mathcal{O}(K)$ scale-invariant compute bound.
+- `--enable-primal-diving`: Activates SCIP sub-MIP primal heuristics (RENS, RINS, Guided Diving) to drive down the primal bound on large-scale instances.
+- `--dive-freq 5`: Frequency of sub-MIP primal diving execution (default: 5).
+- `--instance-tier {small,medium,big}`: Targets evaluation to a specific problem scale tier.
 
 ---
 
