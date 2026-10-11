@@ -1,0 +1,4 @@
+instance_type,instance_path,policy_mode,nnodes,nlps,stime,walltime,gap,status,total_decisions,gnn_decisions,fallback_decisions,fallback_rate,mean_entropy,mean_margin
+small,data/instances/setcover/transfer_500r_1000c_0.05d/instance_1.lp,confidence,57,184,12.69,4.420847647000301,0.0,optimal,28,7,21,75.0,3.6833984340940202,0.02698994747229985
+medium,data/instances/setcover/transfer_1000r_1000c_0.05d/instance_1.lp,confidence,87,350,60.21,16.262876407000476,0.1251883727645023,timelimit,80,14,66,82.5,3.8503305315971375,0.019734364980831743
+big,data/instances/setcover/transfer_2000r_1000c_0.05d/instance_1.lp,confidence,25,462,60.01,27.903300287000093,0.31614121255665345,timelimit,25,0,25,100.0,4.6744342613220216,0.0017004330456256867
