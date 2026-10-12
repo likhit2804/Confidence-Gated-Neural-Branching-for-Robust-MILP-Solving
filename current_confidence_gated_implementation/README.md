@@ -97,7 +97,24 @@ docker run --rm -v "${PWD}:/workspace" -w /workspace/current_confidence_gated_im
   --time-limit 30
 ```
 
-### D. Advanced Mode Flags (Addressing Limitations & OOD Safety):
+### D. Run the Capacitated Facility Location (CFL) Cross-Family Benchmark:
+```bash
+docker run --rm -v "${PWD}:/workspace" -w /workspace/current_confidence_gated_implementation \
+  confidence-branching python eval_cross_family_cfl.py \
+  --n-instances 5 \
+  --time-limit 30
+```
+
+### E. Run the Full-Stack Flagship Benchmark (All 6 Pillars Active + PAR-10 & SGM Metrics):
+```bash
+docker run --rm -v "${PWD}:/workspace" -w /workspace/current_confidence_gated_implementation \
+  confidence-branching python eval_full_stack_flagship.py \
+  --n-instances 10 \
+  --tiers small,medium,big \
+  --time-limit 180
+```
+
+### F. Advanced Mode Flags (Addressing Limitations & OOD Safety):
 - `--quantize-int8`: Applies PyTorch INT8 dynamic quantization to the GCNN linear modules for CPU acceleration and $4\times$ smaller memory footprint.
 - `--candidate-topk 50`: Restricts candidate logit evaluation to the Top-$K$ candidates by pseudocosts, enforcing an $\mathcal{O}(K)$ scale-invariant compute bound.
 - `--enable-primal-diving`: Activates SCIP sub-MIP primal heuristics (RENS, RINS, Guided Diving) to drive down the primal bound on large-scale instances.
