@@ -1,0 +1,2 @@
+instance_type,instance_path,policy_mode,quantize_int8,candidate_topk,enable_primal_diving,dive_triggers,nnodes,nlps,stime,walltime,primal_bound,dual_bound,gap,status,total_decisions,gnn_decisions,fallback_decisions,fallback_rate,mean_norm_entropy,mean_raw_entropy,mean_margin
+big,data/instances/setcover/transfer_2000r_1000c_0.05d/instance_1.lp,confidence,False,0,True,0,9,242,45.01,33.52543718200104,473.0,355.14559754487374,0.3318481300904624,timelimit,9,0,9,100.0,0.9135439995826581,4.731289545694987,0.0015557629780636893
