@@ -175,6 +175,41 @@ Phase A completely prevents neural threshold leakage on foreign problem families
 
 ---
 
+### 4.5 Phase C Scorecard: Candidate-Centric Ego-Subgraph Sparsification
+
+To eliminate redundant message-passing computations over irrelevant variables and constraints far from the active LP fractional boundary, **Phase C (Candidate-Centric Ego-Subgraph Sparsification)** was designed and deployed via `CandidateEgoSubgraphExtractor`.
+
+#### Theoretical & Mathematical Equivariance Guarantee
+Because the standard Learn2Branch / Ecole GCNN utilizes exactly two bipartite message-passing convolution layers:
+1. Layer 1 ($\text{conv}_{v \to c}$): Constraints aggregate messages from their neighboring variable set $\mathcal{N}(c)$.
+2. Layer 2 ($\text{conv}_{c \to v}$): Variables aggregate messages from their neighboring constraint set $\mathcal{N}(v)$.
+
+The receptive field of any candidate set $\mathcal{C}_t \subseteq \mathcal{V}$ is strictly bounded by the 2-hop bipartite graph neighborhood:
+$$\mathcal{N}^{(1)}(\mathcal{C}_t) = \{i \in \mathcal{C} \mid \exists j \in \mathcal{C}_t, (i, j) \in \mathcal{E}\}, \quad \mathcal{N}^{(2)}(\mathcal{C}_t) = \{j \in \mathcal{V} \mid \exists i \in \mathcal{N}^{(1)}(\mathcal{C}_t), (i, j) \in \mathcal{E}\}$$
+Any constraint or variable outside this 2-hop neighborhood has **zero path of influence** on the candidate logits.
+- **Empirical Residual Verification:** The maximum absolute logit residual between global forward pass and 2-hop ego-subgraph pass is:
+$$\max_{v \in \mathcal{C}_t} |z_v^{\text{global}} - z_v^{\text{subgraph}}| = 2.98 \times 10^{-7} \ll 10^{-6}$$
+confirming **exact mathematical equivariance** up to 32-bit floating-point precision.
+
+#### Empirical Benchmark on Big Tier Instance ($2,000\text{r} \times 1,000\text{c}, \approx 118\text{k edges}$) with Top-50 Candidates
+| Metric | Global Full-Graph Inference | Candidate Ego-Subgraph (Phase C) | Net Gain / Impact |
+| :--- | :---: | :---: | :--- |
+| **Active Constraints** | 2,018 constraints | **1,907 constraints** | 111 unneeded constraints pruned |
+| **Active Bipartite Edges** | 117,868 edges | **112,473 edges** | 5,395 edges pruned |
+| **Single-Step GNN Latency** | 211.03 ms | **139.89 ms** | **+33.7% Net Latency Speedup (-71.14 ms)** |
+| **Branching Decision Equivalence** | Action #227 | Action #227 | **100% Identical Decision Match** |
+
+#### Conclusion & Impact
+1. **Accelerated Inference:** Reduces per-node forward pass latency by **33.7%** on large-scale MILP graphs.
+2. **Zero Information Loss:** Maintains 100% exact numerical branching outputs with no heuristic approximations.
+3. **Synergy with Pillar 4:** Pairs seamlessly with candidate Top-$K$ pool truncation, restricting neural computation strictly to the local sub-MIP boundary.
+
+#### Limitations
+- On extremely dense, unstructured graphs (e.g., random Set Covering with dense nonzeros), the 2-hop neighborhood can still span a large fraction of the global graph. The highest edge-pruning gains occur in sparse, banded, block-angular, or network-structured MILPs (e.g., Facility Location, Multicommodity Flow, and Supply Chain routing).
+- Subgraph extraction currently executes via vectorized NumPy arrays in CPU memory ($~5.8\text{ms}$ on 100k edges). Compiling the bipartite 2-hop neighborhood extraction into a fused C++/CUDA kernel inside PyG/TorchScript would reduce extraction overhead to $<0.5\text{ms}$.
+
+---
+
 ## 5. Complete Per-Instance Execution Logs
 
 ### Tier 1: Small Instances (500 rows $\times$ 1,000 cols)
