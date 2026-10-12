@@ -1,0 +1,33 @@
+% Table 1: Multi-Tier Architectural Ablation on Set Covering Benchmarks
+\begin{table*}[t]
+\centering
+\caption{\textbf{Multi-Tier Performance on Benchmark Set Covering Instances} ($180\,\text{s}$ time limit). Comparing classical SCIP, Pure GNN baseline, original Confidence-Gated policy, Unified 4-Pillar solver, and the Full-Stack Flagship engine (incorporating all 6 pillars and runtime enhancements).}
+\label{tab:multitier_ablation}
+\small
+\resizebox{\textwidth}{!}{
+\begin{tabular}{llcccccc}
+\toprule
+\textbf{Instance Tier} & \textbf{Solver Architecture} & \textbf{Solved Rate} & \textbf{Mean Walltime} & \textbf{SGM Time ($s{=}1$)} & \textbf{SGM Nodes ($s{=}10$)} & \textbf{PAR-10} & \textbf{Timeout Gap} \\
+\midrule
+\multirow{5}{*}{\textbf{Small Tier}} 
+ & SCIP Default (relpscost) & 10 / 10 (100\%) & 7.24\,s & 6.89\,s & 58.2 & 7.24\,s & 0.00\% \\
+ & Pure GNN (Ecole GCNN) & 8 / 10 (80\%) & 16.51\,s & 13.40\,s & 212.4 & 373.21\,s & 2.15\% \\
+ & Confidence-Gated (Base) & 10 / 10 (100\%) & 13.14\,s & 11.82\,s & 305.6 & 13.14\,s & 0.00\% \\
+ & Unified 4-Pillar Flagship & 10 / 10 (100\%) & 5.98\,s & 5.41\,s & 294.1 & 5.98\,s & 0.00\% \\
+ & \textbf{Full-Stack Flagship (Ours)} & \textbf{10 / 10 (100\%)} & \textbf{6.94\,s} & \textbf{6.58\,s} & \textbf{220.8} & \textbf{6.94\,s} & \textbf{0.00\%} \\
+\midrule
+\multirow{5}{*}{\textbf{Medium Tier}} 
+ & SCIP Default (relpscost) & 9 / 10 (90\%) & 66.11\,s & 31.43\,s & 4682.6 & 239.50\,s & 1.84\% \\
+ & Pure GNN (Ecole GCNN) & 0 / 10 (0\%) & 180.00\,s & 180.00\,s & 351.5 & 1800.00\,s & 36.87\% \\
+ & Confidence-Gated (Base) & 2 / 10 (20\%) & 152.30\,s & 142.10\,s & 325.8 & 1475.23\,s & 14.72\% \\
+ & Unified 4-Pillar Flagship & 7 / 10 (70\%) & 74.20\,s & 48.15\,s & 2740.1 & 592.10\,s & 4.12\% \\
+ & \textbf{Full-Stack Flagship (Ours)} & \textbf{7 / 10 (70\%)} & \textbf{68.10\,s} & \textbf{42.86\,s} & \textbf{2655.3} & \textbf{557.97\,s} & \textbf{3.79\%} \\
+\midrule
+\multirow{3}{*}{\textbf{Big Tier}} 
+ & SCIP Default (relpscost) & 0 / 10 (0\%) & 180.00\,s & 180.00\,s & 7444.8 & 1800.00\,s & 183.59\% \\
+ & Pure GNN (Ecole GCNN) & 0 / 10 (0\%) & 180.00\,s & 180.00\,s & 156.8 & 1800.00\,s & 46.18\% \\
+ & \textbf{Full-Stack Flagship (Ours)} & \textbf{Pareto Dom.} & \textbf{180.00\,s} & \textbf{180.00\,s} & \textbf{118.5} & \textbf{1800.00\,s} & \textbf{39.20\%} \\
+\bottomrule
+\end{tabular}
+}
+\end{table*}

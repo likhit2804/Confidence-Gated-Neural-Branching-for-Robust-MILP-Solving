@@ -1,0 +1,24 @@
+% Table 2: Cross-Family Zero-Shot Generalization & Autonomous OOD Clamping
+\begin{table*}[t]
+\centering
+\caption{\textbf{Zero-Shot Cross-Family Generalization and Autonomous OOD Guardrails.} Evaluating policies trained exclusively on Set Covering ($500\,\text{r}$) across out-of-distribution problem families with distinct constraint tensor polarities.}
+\label{tab:cross_family}
+\small
+\begin{tabular}{llccccc}
+\toprule
+\textbf{Target Problem Family} & \textbf{Evaluation Policy} & \textbf{Root Polarity} & \textbf{OOD Flagged} & \textbf{Mean Time} & \textbf{B\&B Nodes} & \textbf{Optimality Gap} \\
+\midrule
+\multirow{4}{*}{\textbf{Combinatorial Auction}}
+ & SCIP Default (relpscost) & $\mu_{\text{cos}} = +0.45$ & N/A & 1.98\,s & 11 & 0.0000 (Optimal) \\
+ & Pure GNN (Zero-Shot) & $\mu_{\text{cos}} = +0.45$ & False & 3.42\,s & 239 & 0.0162 (Timeout) \\
+ & Fixed Gated ($\tau_h{=}0.85$) & $\mu_{\text{cos}} = +0.45$ & False & 1.26\,s & 275 & 0.0000 (Optimal) \\
+ & \textbf{Adaptive OOD Gate (Phase A)} & $\mu_{\text{cos}} = +0.45$ & \textbf{True} & \textbf{0.91\,s} & \textbf{228} & \textbf{0.0000 (Optimal)} \\
+\midrule
+\multirow{4}{*}{\textbf{Capacitated Facility Location}}
+ & SCIP Default (relpscost) & $\mu_{\text{cos}} = +0.12$ & N/A & 0.31\,s & 5 & 0.0000 (Optimal) \\
+ & Pure GNN (Zero-Shot) & $\mu_{\text{cos}} = +0.12$ & False & 0.04\,s & 3 & 0.0000 (Optimal) \\
+ & Fixed Gated ($\tau_h{=}0.85$) & $\mu_{\text{cos}} = +0.12$ & False & 0.04\,s & 5 & 0.0000 (Optimal) \\
+ & \textbf{Adaptive OOD Gate (Phase A)} & $\mu_{\text{cos}} = +0.12$ & \textbf{True} & \textbf{0.03\,s} & \textbf{5} & \textbf{0.0000 (Optimal)} \\
+\bottomrule
+\end{tabular}
+\end{table*}

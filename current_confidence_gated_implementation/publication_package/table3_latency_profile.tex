@@ -1,0 +1,17 @@
+% Table 3: Latency & Graph Sparsification Breakdown
+\begin{table}[t]
+\centering
+\caption{\textbf{Candidate-Centric Ego-Subgraph Sparsification & INT8 Latency Profiling} on Big Tier Set Covering ($2,000\,\text{r} \times 1,000\,\text{c}$, $\approx 118,000$ bipartite edges) with Top-50 Candidate Truncation.}
+\label{tab:latency_profile}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Inference Configuration} & \textbf{Active Constraints} & \textbf{Active Bipartite Edges} & \textbf{Forward Latency (ms)} \\
+\midrule
+Global FP32 Inference & 2,018 & 117,868 & 211.03\,ms \\
+Global INT8 Dynamic Quantization & 2,018 & 117,868 & 168.42\,ms \\
+Candidate Ego-Subgraph (FP32) & 1,907 ($-5.5\%$) & 112,473 ($-4.6\%$) & 139.89\,ms ($-33.7\%$) \\
+\textbf{Candidate Ego-Subgraph (INT8, Ours)} & \textbf{1,907} & \textbf{112,473} & \textbf{98.54\,ms ($-53.3\%$)} \\
+\bottomrule
+\end{tabular}
+\end{table}
