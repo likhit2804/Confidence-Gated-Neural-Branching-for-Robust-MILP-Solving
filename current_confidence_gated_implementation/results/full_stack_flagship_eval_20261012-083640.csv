@@ -1,0 +1,2 @@
+instance_id,tier,instance_path,status,walltime,stime,nnodes,nlps,primal_bound,dual_bound,gap,fallback_rate,early_exit_rate,dive_triggers,is_ood,mean_norm_entropy,mean_margin
+1,big,data/instances/setcover/transfer_2000r_1000c_0.05d/instance_1.lp,timelimit,40.885010521997174,60.01,15,455,469.0,356.49002540142277,0.31560483206195256,100.0,0.0,0,False,0.9686639987398469,0.002168460190296173
