@@ -1,39 +1,63 @@
-\documentclass[11pt,twocolumn]{article}
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+% --- Authentic Conference/Journal Typography Stack ---
+\usepackage{times}
+\usepackage{mathptmx}
+\usepackage[scaled=0.92]{helvet}
+\usepackage{courier}
 \usepackage[utf8]{inputenc}
-\usepackage[margin=0.75in]{geometry}
+\usepackage[margin=0.75in,columnsep=0.25in]{geometry}
+
+% --- Mathematical & Algorithmic Packages ---
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{graphicx}
-\usepackage{hyperref}
 \usepackage{algorithm}
 \usepackage{algorithmic}
 \usepackage{cite}
 \usepackage{microtype}
 \usepackage{xcolor}
+\usepackage{caption}
 
-\newtheorem{theorem}{Theorem}
-\newtheorem{lemma}{Lemma}
-\newtheorem{proposition}{Proposition}
-\newtheorem{definition}{Definition}
-\newtheorem{corollary}{Corollary}
+% --- Captions & Table Spacing ---
+\captionsetup{font=small,labelfont=bf,skip=5pt}
+\renewcommand{\arraystretch}{1.15}
 
+% --- Hyperlink Formatting ---
+\usepackage{hyperref}
 \hypersetup{
     colorlinks=true,
-    linkcolor=blue!70!black,
+    linkcolor=blue!75!black,
     citecolor=green!50!black,
-    urlcolor=blue!70!black
+    urlcolor=blue!75!black
 }
 
-\title{\textbf{Confidence-Gated Neural Branching for Robust Mixed-Integer Linear Programming: Scale Invariance, Receptive Field Equivariance, and Autonomous OOD Guardrails}}
+% --- Theorem Environments ---
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
 
-\author{
-  \textbf{Autonomous Agentic Research Lab} \\
-  \texttt{research@branching.ai}
-}
-\date{\today}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{assumption}{Assumption}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
 
 \begin{document}
+
+\title{\LARGE \textbf{Confidence-Gated Neural Branching for Robust Mixed-Integer Linear Programming:\\Scale Invariance, Receptive Field Equivariance, and Autonomous Guardrails}}
+
+\author{
+  \textbf{Autonomous Agentic Research Lab}\thanks{Corresponding author: \texttt{research@branching.ai}.} \\
+  \textit{Department of Mathematical Optimization \& Deep Learning} \\
+  \textit{Autonomous Optimization Systems Group}
+}
+
+\date{\today}
 
 \maketitle
 
@@ -51,13 +75,19 @@ In this work, we propose \textbf{Confidence-Gated Neural Branching}, an end-to-e
 Evaluated under the DeepMind benchmark protocol on standard and large-scale MILP benchmarks, our framework achieves a $+47.2\%$ wall-clock speedup on small instances ($500\text{r} \times 1,000\text{c}$), increases provable optimal solves from $20\%$ to $70\%$ on medium instances ($1,000\text{r} \times 1,000\text{c}$), reduces timeout primal-dual gap by $73\%$, and eliminates catastrophic failure on foreign combinatorial auction and facility location distributions.
 \end{abstract}
 
+\vspace{0.5em}
+\noindent \textbf{Keywords:} Mixed-Integer Linear Programming, Graph Convolutional Networks, Variable Selection, Branch-and-Bound, Epistemic Uncertainty, Receptive Field Equivariance, Out-of-Distribution Generalization.
+
 \section{Introduction}
+\label{sec:intro}
+
+\subsection{Context and the Computational Bottleneck in Exact Branch-and-Bound}
 Mixed-Integer Linear Programming (MILP) is an NP-hard foundation for combinatorial optimization, underpinning critical supply chains, telecommunication routing, power grid dispatch, and hardware verification~\cite{achterberg2005branching,gamrath2020scip}. Modern exact solvers rely on the \textbf{Branch-and-Bound (B\&B)} algorithm, where continuous Linear Programming (LP) relaxations are recursively partitioned into a search tree. The efficiency of B\&B depends critically on \textit{variable selection} (branching) at each fractional search node.
 
 While \textbf{Full Strong Branching (FSB)} minimizes tree size by tentatively solving candidate LP relaxations for all fractional variables, its computational cost is prohibitive ($\mathcal{O}(|\mathcal{C}| \cdot T_{\text{LP}})$ where $|\mathcal{C}|$ is the candidate set and $T_{\text{LP}}$ is simplex solve time)~\cite{achterberg2005branching}. To circumvent this bottleneck, recent advances in Machine Learning for Combinatorial Optimization (ML4CO) have leveraged Graph Convolutional Neural Networks (GCNNs) over bipartite problem graphs to imitate FSB via supervised learning~\cite{gasse2019exact,prouvost2020ecole,nair2020solving}.
 
 \subsection{Pathologies of Unconditional Neural Branching}
-Despite promising theoretical reductions in search tree nodes, deploying deep neural branching policies in practical solvers reveals severe algorithmic pathologies:
+Despite promising theoretical reductions in search tree nodes, deploying deep neural branching policies unconditionally across 100\% of B\&B nodes in practical solvers reveals severe algorithmic pathologies:
 
 \begin{enumerate}
     \item \textbf{Inference Latency Sunk Cost:} Simplex pivots and classical heuristics such as Reliable Pseudocosts (`relpscost`) execute in $<0.05\,\text{ms}$ on CPU, whereas evaluating a 2-layer GCNN requires $15\text{--}40\,\text{ms}$~\cite{gasse2019exact,nair2020solving}. At shallow or trivial nodes where classical rules make effective choices instantly, running graph convolutions unconditionally incurs massive wall-clock penalties.
@@ -66,7 +96,7 @@ Despite promising theoretical reductions in search tree nodes, deploying deep ne
     \item \textbf{Cross-Family Out-of-Distribution Vulnerability:} GCNN policies trained on one problem family (e.g., Set Covering) learn structural inductive biases tied to constraint geometries. When deployed zero-shot on foreign families (e.g., Combinatorial Auctions or Facility Location), uncalibrated softmax logits exhibit false certainty, causing search tree explosions up to $36\times$ larger than classical defaults.
 \end{enumerate}
 
-\subsection{Our Contributions}
+\subsection{Contributions and Architectural Overview}
 To resolve these foundational vulnerabilities, we propose \textbf{Confidence-Gated Neural Branching}, a principled and self-auditing framework for exact MILP solving. Our contributions include:
 \begin{itemize}
     \item \textbf{Scale-Invariant Epistemic Uncertainty Gate:} We formulate Normalized Shannon Entropy $\tilde{H} \in [0, 1]$ scaled by candidate cardinality $\ln |\mathcal{C}_t|$ combined with Top-2 margin separation $\Delta p$, enabling universal zero-shot threshold transfer across problem scales.
@@ -78,6 +108,7 @@ To resolve these foundational vulnerabilities, we propose \textbf{Confidence-Gat
 \end{itemize}
 
 \section{Related Work}
+\label{sec:related}
 
 \subsection{Machine Learning for Variable Selection}
 The application of statistical learning to MILP branching originated with ranking and regression models predicting strong branching scores~\cite{alvarez2017machine,khalil2016learning}. Gasse et al.~\cite{gasse2019exact} revolutionized the field by introducing a bipartite graph representation of MILPs and training bipartite Graph Convolutional Networks via behavioral cloning on FSB demonstrations. Subsequent extensions developed hybrid architectures~\cite{gupta2020hybrid}, lookback exploration~\cite{gupta2022lookback}, and Tree Markov Decision Process formulations~\cite{scavuzzo2022learning,scavuzzo2024machine}. 
@@ -87,10 +118,11 @@ However, prior hybrid approaches rely strictly on static tree-depth heuristics (
 \subsection{Selective Prediction and Uncertainty Quantification}
 Selective prediction with a reject option has a storied history in statistical decision theory, dating back to Chow's optimal error-reject trade-off~\cite{chow1970optimum}. Modern deep learning extensions include SelectiveNet~\cite{geifman2019selectivenet} and learning-to-defer frameworks~\cite{madras2018predictive}. In classification, softmax outputs are known to be systematically uncalibrated under domain shift~\cite{guo2017calibration}. In active learning, Top-2 Best-versus-Second-Best (BvSB) margins~\cite{joshi2009multi} capture label ambiguity. Our work extends these concepts to combinatorial optimization by accounting for fluctuating candidate cardinality and coupling uncertainty rejection directly with SCIP's internal Reliable Pseudocosts.
 
-\subsection{Primal Heuristics and Graph Sparsification}
+\subsection{Primal Heuristics and Sub-MIP Diving}
 Finding feasible integer solutions (primal bounds) is critical for pruning search tree nodes early. Nair et al.~\cite{nair2020solving} developed Neural Diving, training neural networks to fix subsets of integer variables to form small sub-MIPs. Classical sub-MIP heuristics include RENS (Relaxation Enforced Neighborhood Search)~\cite{berthold2014rens} and RINS (Relaxation Induced Neighborhood Search)~\cite{danna2005rins}. In our framework, we employ confidence gating to trigger primal sub-MIP diving when the dual search tree indicates high variable certainty.
 
 \section{Problem Formulation}
+\label{sec:formulation}
 
 \subsection{Mixed-Integer Linear Programming}
 A general Mixed-Integer Linear Program (MILP) is expressed as:
@@ -135,6 +167,7 @@ Finally, candidate branching scores are produced via a readout MLP:
 \end{equation}
 
 \section{Confidence-Gated Neural Branching Architecture}
+\label{sec:architecture}
 We introduce Confidence-Gated Neural Branching, an end-to-end framework depicted in Algorithm~\ref{alg:full_stack}.
 
 \subsection{Scale-Invariant Epistemic Uncertainty Quantification}
@@ -302,7 +335,7 @@ This forces $100\%$ fallback to SCIP pseudocosts on foreign distributions, preve
 \subsection{Primal Diving Integration}
 To combat primal-dual asymmetry on large instances, we couple confidence gating with sub-MIP primal diving (RENS/RINS). At periodic search depths (frequency = 5), when average branching confidence is high ($\tilde{H} \le 0.60$), the solver fixes fractional variables with $x_j^* \ge 0.90$ and invokes SCIP's internal sub-MIP heuristic. This discovers early incumbent integer solutions, pruning subtrees that would otherwise time out.
 
-% Table 1: Multi-Tier Architectural Ablation on Set Covering Benchmarks
+% --- Table 1: Multi-Tier Architectural Ablation ---
 \begin{table*}[t]
 \centering
 \caption{\textbf{Multi-Tier Performance on Benchmark Set Covering Instances} ($180\,\text{s}$ time limit). Comparing classical SCIP, Pure GNN baseline, original Confidence-Gated policy, Unified 4-Pillar solver, and the Full-Stack Flagship engine (incorporating all 6 pillars and runtime enhancements).}
@@ -337,6 +370,7 @@ To combat primal-dual asymmetry on large instances, we couple confidence gating 
 \end{table*}
 
 \section{Empirical Evaluation}
+\label{sec:experiments}
 
 \subsection{Experimental Setup}
 We implement our framework in Python 3.8 and C++ using the Ecole 0.7.3 environment~\cite{prouvost2020ecole} and the SCIP 7.0.1 optimization engine~\cite{gamrath2020scip}. Neural networks are executed in PyTorch with dynamic INT8 quantization. Benchmarks were run inside a standardized Docker container (`confidence-branching:latest`) on an Intel CPU with an exact $180\,\text{s}$ wall-clock limit per solve.
@@ -357,7 +391,7 @@ Table~\ref{tab:multitier_ablation} reports comprehensive performance across 30 i
     \item \textbf{Big Tier ($2,000\text{r} \times 1,000\text{c}$):} $4\times$ size shift ($118\text{k}$ edges). All systems hit the $180\,\text{s}$ limit. However, Pure GNN suffers a $46.18\%$ optimality gap, whereas our framework prunes search trees by $170\times$ vs SCIP ($43.4$ vs $7,445$ nodes) and shrinks timeout gap to $19.39\%$.
 \end{itemize}
 
-% Table 2: Cross-Family Zero-Shot Generalization & Autonomous OOD Clamping
+% --- Table 2: Cross-Family Zero-Shot Generalization ---
 \begin{table*}[t]
 \centering
 \caption{\textbf{Zero-Shot Cross-Family Generalization and Autonomous OOD Guardrails.} Evaluating policies trained exclusively on Set Covering ($500\,\text{r}$) across out-of-distribution problem families with distinct constraint tensor polarities.}
@@ -389,7 +423,7 @@ To evaluate robustness under distribution shift, we deploy the policy—trained 
     \item \textbf{Capacitated Facility Location (100 Facilities, 100 Customers):} Cornu{\'e}jols formulation~\cite{cornuejols1991comparison} ($\mu_{\text{cos}} = +0.12$). The adaptive detector flags OOD and safely achieves optimal solves in $0.03\,\text{s}$ with 5 nodes.
 \end{itemize}
 
-% Table 3: Latency & Graph Sparsification Breakdown
+% --- Table 3: Latency & Graph Sparsification Breakdown ---
 \begin{table}[t]
 \centering
 \caption{\textbf{Candidate-Centric Ego-Subgraph Sparsification \& INT8 Latency Profiling} on Big Tier Set Covering ($2,000\,\text{r} \times 1,000\,\text{c}$, $\approx 118,000$ bipartite edges) with Top-50 Candidate Truncation.}
@@ -430,6 +464,7 @@ To dissect the individual contributions of our six pillars, we conducted a syste
 \end{enumerate}
 
 \section{Discussion \& Theoretical Insights}
+\label{sec:discussion}
 
 \subsection{Mitigating Compounding Imitation Errors}
 Supervised imitation learning algorithms in sequential environments inevitably deviate from expert trajectories~\cite{ross2011reduction,bengio2021machine}. When a pure GNN policy makes an initial suboptimal branching decision near the root of the B\&B tree, the downstream search tree diverges into subproblems never observed during training. Because the neural policy lacks a self-assessment mechanism, it continues making degraded predictions, causing tree size to explode exponentially.
@@ -440,6 +475,7 @@ By enforcing the dual gating condition ($\tilde{H} \le \tau_h \land \Delta p \ge
 Theorem~\ref{thm:equivariance} reveals that deep graph convolution in 2-layer GCNNs possesses strict finite spatial support. While whole-graph message passing has been standard practice in ML4CO~\cite{gasse2019exact,prouvost2020ecole}, our result proves that constraints and variables beyond 2 hops from the fractional boundary have zero algebraic influence on candidate branching logits. By pruning non-essential vertices before convolution, solvers achieve substantial speedups without heuristic approximation.
 
 \section{Limitations \& Research Roadmap}
+\label{sec:limitations}
 While our framework establishes state-of-the-art robustness, several engineering and scientific frontiers remain open:
 \begin{enumerate}
     \item \textbf{Memory Marshalling Overhead:} Ego-subgraph extraction is currently implemented in vectorized NumPy on CPU ($~5.8\,\text{ms}$ on 100k edges). Compiling bipartite 2-hop extraction into fused C++/CUDA kernels within PyG or TorchScript would reduce preprocessing latency to $<0.5\,\text{ms}$.
@@ -448,9 +484,10 @@ While our framework establishes state-of-the-art robustness, several engineering
 \end{enumerate}
 
 \section{Conclusion}
+\label{sec:conclusion}
 Confidence-Gated Neural Branching bridges the divide between deep combinatorial learning and robust solver engineering. By marrying scale-invariant epistemic uncertainty quantification with candidate-centric ego-subgraph equivariance, multi-layer meta-triage, and autonomous root-node domain shift guardrails, our framework eliminates the primary failure modes of neural branching. It provides provable mathematical safety nets under distribution shift while delivering substantial wall-clock speedups on large-scale combinatorial optimization problems.
 
-% Single-File Embedded Self-Contained Bibliography
+% --- Single-File Embedded Self-Contained Bibliography ---
 \begin{thebibliography}{99}
 
 \bibitem{achterberg2005branching}
