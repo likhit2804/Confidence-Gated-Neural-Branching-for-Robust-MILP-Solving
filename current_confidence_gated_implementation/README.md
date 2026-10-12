@@ -106,24 +106,40 @@ Validated on 30 benchmark instances across three scale tiers (Set Covering insta
 
 *Note: Node counts reported are arithmetic means across the 10 instances in the tier (total 1,185 vs. 74,448 nodes).*
 
-### Upgraded Mitigation Performance: Adaptive Meta-Triage & Temperature Scaling ($T=1.2$, $d=20$, $\tau_{\text{pseudo}}=0.35$)
-Across the 30 benchmark instances:
-- **559 GNN forward passes safely bypassed in $<1\,\mu\text{s}$** (170 depth cutoff, 389 pseudocost decisiveness).
-- **30.17 seconds saved** in total wall-clock time (-3.05% net reduction).
-- **Big Tier ($4\times$ shift):** 30.78s faster (6.09% speedup), with 8/10 instances running faster (up to 6.2s faster per instance).
-- **Small Tier:** 9.87s faster (7.51% speedup).
-- **Hard Instance Prunings:** Medium Instance #1 (389 $\to$ 313 nodes, -19.5%), Medium Instance #2 (434 $\to$ 370 nodes, -14.7%), Small Instance #5 (343 $\to$ 263 nodes, -23.3%).
+### Unified 4-Pillar Solver Benchmark Results (Synthesizing All Mitigations)
+Evaluating the unified architecture with INT8 quantization, Top-50 candidate pooling, Primal Diving (freq=5), and Adaptive Meta-Triage ($T=1.2, d=20, \tau_{\text{pseudo}}=0.35$):
+- **Small Tier ($500\text{r}$):** Net wall-clock time plummeted from **$131.35\text{s} \to 59.80\text{s}$ (+54.5% speedup, saving 71.55s)**, with search tree nodes pruned from $3,150 \to 3,047$.
+- **Medium Tier ($1000\text{r}$):** Solve rate jumped from **2 / 10 $\to$ 7 / 10 solved to proven optimality**; remaining timeouts saw optimality gaps fall from $15\% \to 3\%$.
+- **Big Tier ($2000\text{r}$):** Per-node latency was slashed by $35\%$, discovering high-quality integer incumbents ($473.00, 383.00, 378.00$) in $<10$ nodes.
 
 ---
 
-## 5. Authoritative Scientific Treatise: RESEARCH_COMPENDIUM.md
+### 4.2 Zero-Shot Cross-Family Generalization: Combinatorial Auction
+Evaluated the GNN model—**trained strictly on Set Covering**—directly on **Combinatorial Auction (100 items, 500 bids)**:
+- **Pure GNN (un-gated):** Suffered catastrophic out-of-distribution failure (0/5 solved, massive $36\times$ tree explosion).
+- **Confidence-Gated ($\tau_h=0.85$):** Achieved $20\%\text{--}32\%$ lower optimality gaps and faster runtimes than Pure GNN by triggering fallback on $37\%\text{--}54\%$ of nodes.
+- **The Threshold Leakage Discovery:** A fixed gate threshold ($\tau_h=0.85$) calibrated on Set Covering ($A x \ge 1$) leaks on foreign packing structures ($A x \le 1$) because foreign entropy ($\tilde{H} \approx 0.77$) slips below the gate.
+- **The Empirical Fix:** Tightening the gate to $\tau_h \le 0.50$ routed $100\%$ of foreign decisions to SCIP's reliable pseudocosts, **solving the instance to proven 0.00% optimality in 3.15s**!
 
-To maintain a clean separation between operational usage and scientific research, all detailed mathematical derivations, literature comparisons, and per-instance raw logs are maintained in [RESEARCH_COMPENDIUM.md](file:///c:/Users/likhi/OneDrive/Pictures/Desktop/gnn/Confidence-Gated-Neural-Branching-for-Robust-MILP-Solving/current_confidence_gated_implementation/RESEARCH_COMPENDIUM.md).
+---
 
-Please refer to [RESEARCH_COMPENDIUM.md](file:///c:/Users/likhi/OneDrive/Pictures/Desktop/gnn/Confidence-Gated-Neural-Branching-for-Robust-MILP-Solving/current_confidence_gated_implementation/RESEARCH_COMPENDIUM.md) for:
-1. **Mathematical & Graph Formulations:** Lossless bipartite graph formulation $G = (\mathcal{V}_{var} \cup \mathcal{V}_{con}, \mathcal{E})$ and LP relaxation embeddings.
-2. **Exhaustive Literature Breakdown:** Detailed attribution comparing what prior papers established (Gasse et al. 2019, Nair et al. 2020, Gupta et al. 2020, Ross et al. 2011) versus what was directly measured in our empirical benchmarks.
-3. **Foundational Academic Lineage:** Theoretical foundations for our novel components (Shannon 1948, Pielou 1966, Settles 2009, Joshi et al. 2009, Chow 1970, Cortes et al. 2016, Madras et al. 2018).
-4. **Complete Per-Instance Execution Logs:** Full runtime, node count, and fallback percentage logs for all 30 evaluated instances.
-5. **Scientific Limitations & Future Roadmap:** In-depth discussion of forward-pass sunk costs, calibration vulnerabilities, primal/dual asymmetry, and the 4-axis scope of future improvements (learned meta-triage, cross-family transfer, primal diving, and INT8 quantization).
-6. **Academic References & BibTeX:** Full bibliography for academic citations and thesis integration.
+## 5. What's Next: Concrete Engineering & Research Improvement Plan
+
+1. **Root-Node Adaptive OOD Detection & Dynamic Thresholding:**
+   - *WHAT:* Auto-detect distribution shifts at tree depth $d=0$ to dynamically set effective rejection threshold $\tau_h^{\text{eff}}$.
+   - *HOW:* Measure root node mean candidate entropy $\bar{H}_0$. If $\bar{H}_0 > 0.70$ or constraint signs mismatch training data, dynamically clamp $\tau_h^{\text{eff}} \le 0.50$.
+   - *WHY:* Prevents "confidently incompetent" leakage on foreign problem families without requiring manual threshold tuning.
+2. **Multi-Task Diverse MILP Pretraining:**
+   - *WHAT:* Train a universal GNN across diverse canonical families (Covering, Auctions, Facility Location, MIS) simultaneously.
+   - *HOW:* Multi-task cross-entropy imitation loss with balanced sampling across Ecole generators.
+   - *WHY:* Teaches the GNN problem-agnostic structural representations rather than overfitting to Set Covering matrices.
+3. **Candidate-Centric Ego-Subgraph Sparsification:**
+   - *WHAT:* Extract a 2-hop active bipartite subgraph centered strictly around fractional candidates.
+   - *HOW:* Prune inactive constraints and fixed integer variables before PyTorch Geometric `propagate()`.
+   - *WHY:* Eliminates scatter-add pointer traversal on $>100,000$ edges, accelerating GNN passes by an additional $3\times\text{--}5\times$.
+
+---
+
+## 6. Authoritative Scientific Treatise: RESEARCH_COMPENDIUM.md
+
+All detailed mathematical derivations, literature breakdowns, and complete per-instance raw execution logs are maintained in [RESEARCH_COMPENDIUM.md](file:///c:/Users/likhi/OneDrive/Pictures/Desktop/gnn/Confidence-Gated-Neural-Branching-for-Robust-MILP-Solving/current_confidence_gated_implementation/RESEARCH_COMPENDIUM.md).
