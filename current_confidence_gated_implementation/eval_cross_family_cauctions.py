@@ -111,40 +111,79 @@ def run_cross_family_benchmark(n_instances=5, time_limit=30):
             results.append(rec_pure)
             print(f"  [Pure GNN]     : Nodes: {rec_pure['nnodes']:4d} | Time: {rec_pure['walltime']:5.2f}s | Gap: {rec_pure['gap']:.4f} | Status: {rec_pure['status']}")
 
-            # 3. Confidence-Gated (Ours, Universal Gate h=0.85)
-            env_gated = ecole.environment.Branching(
+            # 3. Fixed Confidence-Gated (Without Phase A OOD detection: threshold leakage)
+            env_fixed = ecole.environment.Branching(
                 observation_function={'node_obs': ecole.observation.NodeBipartite(), 'pseudocosts': ecole.observation.Pseudocosts()},
                 scip_params={'limits/time': time_limit, 'timing/clocktype': 1, 'separating/maxrounds': 0, 'presolving/maxrestarts': 0}
             )
-            policy_gated = UnifiedConfidenceGatedBranchingPolicy(
+            policy_fixed = UnifiedConfidenceGatedBranchingPolicy(
                 gnn, mode='confidence', margin_thresh=0.02, entropy_thresh=0.85,
-                quantize_int8=True, enable_primal_diving=True
+                quantize_int8=True, enable_primal_diving=True, enable_ood_detection=False
             )
-            obs, act_set, _, done, _ = env_gated.reset(inst_path)
+            obs, act_set, _, done, _ = env_fixed.reset(inst_path)
             t0 = time.perf_counter()
+            depth_cnt = 0
             while not done:
-                action = policy_gated.select_action(obs['node_obs'], act_set, obs['pseudocosts'])
-                obs, act_set, _, done, _ = env_gated.step(action)
-            gated_wall = time.perf_counter() - t0
-            m_gated = env_gated.model.as_pyscipopt()
-            fb_rate = (policy_gated.fallback_decisions / max(1, policy_gated.total_decisions)) * 100.0
+                action = policy_fixed.select_action(obs['node_obs'], act_set, obs['pseudocosts'], depth=depth_cnt)
+                obs, act_set, _, done, _ = env_fixed.step(action)
+                depth_cnt += 1
+            fixed_wall = time.perf_counter() - t0
+            m_fixed = env_fixed.model.as_pyscipopt()
+            fb_rate_fixed = (policy_fixed.fallback_decisions / max(1, policy_fixed.total_decisions)) * 100.0
 
-            rec_gated = {
+            rec_fixed = {
                 'instance_id': idx,
-                'system': 'Confidence_Gated_Ours',
-                'nnodes': m_gated.getNNodes(),
-                'stime': m_gated.getSolvingTime(),
-                'walltime': gated_wall,
-                'gap': m_gated.getGap(),
-                'status': m_gated.getStatus(),
-                'fallback_rate': fb_rate,
-                'total_decisions': policy_gated.total_decisions,
-                'gnn_decisions': policy_gated.gnn_decisions,
-                'fallback_decisions': policy_gated.fallback_decisions
+                'system': 'Fixed_Gated_NoOOD',
+                'nnodes': m_fixed.getNNodes(),
+                'stime': m_fixed.getSolvingTime(),
+                'walltime': fixed_wall,
+                'gap': m_fixed.getGap(),
+                'status': m_fixed.getStatus(),
+                'fallback_rate': fb_rate_fixed,
+                'total_decisions': policy_fixed.total_decisions,
+                'gnn_decisions': policy_fixed.gnn_decisions,
+                'fallback_decisions': policy_fixed.fallback_decisions
             }
-            writer.writerow(rec_gated)
-            results.append(rec_gated)
-            print(f"  [Gated Ours]   : Nodes: {rec_gated['nnodes']:4d} | Time: {rec_gated['walltime']:5.2f}s | Gap: {rec_gated['gap']:.4f} | Status: {rec_gated['status']} | Fallback: {fb_rate:.1f}%")
+            writer.writerow(rec_fixed)
+            results.append(rec_fixed)
+            print(f"  [Fixed Gate]   : Nodes: {rec_fixed['nnodes']:4d} | Time: {rec_fixed['walltime']:5.2f}s | Gap: {rec_fixed['gap']:.4f} | Status: {rec_fixed['status']} | Fallback: {fb_rate_fixed:.1f}%")
+
+            # 4. Adaptive OOD Gated (Phase A: Autonomous Root-Node Detection)
+            env_ood = ecole.environment.Branching(
+                observation_function={'node_obs': ecole.observation.NodeBipartite(), 'pseudocosts': ecole.observation.Pseudocosts()},
+                scip_params={'limits/time': time_limit, 'timing/clocktype': 1, 'separating/maxrounds': 0, 'presolving/maxrestarts': 0}
+            )
+            policy_ood = UnifiedConfidenceGatedBranchingPolicy(
+                gnn, mode='confidence', margin_thresh=0.02, entropy_thresh=0.85,
+                quantize_int8=True, enable_primal_diving=True, enable_ood_detection=True
+            )
+            obs, act_set, _, done, _ = env_ood.reset(inst_path)
+            t0 = time.perf_counter()
+            depth_cnt = 0
+            while not done:
+                action = policy_ood.select_action(obs['node_obs'], act_set, obs['pseudocosts'], depth=depth_cnt)
+                obs, act_set, _, done, _ = env_ood.step(action)
+                depth_cnt += 1
+            ood_wall = time.perf_counter() - t0
+            m_ood = env_ood.model.as_pyscipopt()
+            fb_rate_ood = (policy_ood.fallback_decisions / max(1, policy_ood.total_decisions)) * 100.0
+
+            rec_ood = {
+                'instance_id': idx,
+                'system': 'Adaptive_OOD_PhaseA',
+                'nnodes': m_ood.getNNodes(),
+                'stime': m_ood.getSolvingTime(),
+                'walltime': ood_wall,
+                'gap': m_ood.getGap(),
+                'status': m_ood.getStatus(),
+                'fallback_rate': fb_rate_ood,
+                'total_decisions': policy_ood.total_decisions,
+                'gnn_decisions': policy_ood.gnn_decisions,
+                'fallback_decisions': policy_ood.fallback_decisions
+            }
+            writer.writerow(rec_ood)
+            results.append(rec_ood)
+            print(f"  [Phase A OOD]  : Nodes: {rec_ood['nnodes']:4d} | Time: {rec_ood['walltime']:5.2f}s | Gap: {rec_ood['gap']:.4f} | Status: {rec_ood['status']} | Fallback: {fb_rate_ood:.1f}% (OOD={policy_ood.is_ood_detected})")
 
             f.flush()
 
@@ -154,4 +193,9 @@ def run_cross_family_benchmark(n_instances=5, time_limit=30):
     return csv_path
 
 if __name__ == '__main__':
-    run_cross_family_benchmark(n_instances=5, time_limit=30)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--n-instances', type=int, default=5)
+    parser.add_argument('--time-limit', type=int, default=30)
+    args = parser.parse_args()
+    run_cross_family_benchmark(n_instances=args.n_instances, time_limit=args.time_limit)

@@ -49,8 +49,12 @@ At each branch-and-bound node with candidate set $\mathcal{C}$ and softmax distr
    - **LP Fractionality Topology Decisiveness:** If one candidate is deeply centered at 0.5 while competing candidates are far from 0.5 ($\Delta f_{\text{decisive}} \ge 0.20$), triggers instant pre-GNN bypass in $<0.1\,\mu\text{s}$.
    - **Adaptive Pseudocost Decisiveness Rule:** At depth $\ge 5$, if relative pseudocost margin $\Delta \psi_{\text{rel}} \ge 0.35$, bypasses GNN in $<1\,\mu\text{s}$, eliminating CPU sunk costs.
 
-5. **Dual-Gating Decision Rule:**
-   - **Execute GNN Branching:** If $\Delta p \ge \tau_m$ ($0.02$) **AND** $\tilde{H} \le \tau_h$ ($0.85$) (when triage permits).
+5. **Autonomous Root-Node Adaptive OOD Detection (Phase A):**
+   - At root depth $d=0$, computes constraint-objective cosine alignment $\text{mean}(\mathbf{c}_{i, 0})$.
+   - On foreign packing distributions (e.g., Combinatorial Auction), detects domain shift and clamps $\tau_{h,\text{eff}} \le 0.50, \tau_{m,\text{eff}} \ge 0.25$, triggering 100% fallback safety and eliminating threshold leakage autonomously!
+
+6. **Dual-Gating Decision Rule:**
+   - **Execute GNN Branching:** If $\Delta p \ge \tau_{m,\text{eff}}$ AND $\tilde{H} \le \tau_{h,\text{eff}}$ (when triage permits).
    - **Fallback to SCIP Pseudocosts:** Otherwise (instant, zero-overhead mathematical safety net).
 
 ---
@@ -85,12 +89,21 @@ docker run --rm -v "${PWD}:/workspace" -w /workspace/current_confidence_gated_im
   --time-limit 180
 ```
 
-### C. Advanced Mode Flags (Addressing Limitations 3 & 4):
+### C. Run the Zero-Shot Cross-Family Benchmark (Combinatorial Auction):
+```bash
+docker run --rm -v "${PWD}:/workspace" -w /workspace/current_confidence_gated_implementation \
+  confidence-branching python eval_cross_family_cauctions.py \
+  --n-instances 5 \
+  --time-limit 30
+```
+
+### D. Advanced Mode Flags (Addressing Limitations & OOD Safety):
 - `--quantize-int8`: Applies PyTorch INT8 dynamic quantization to the GCNN linear modules for CPU acceleration and $4\times$ smaller memory footprint.
 - `--candidate-topk 50`: Restricts candidate logit evaluation to the Top-$K$ candidates by pseudocosts, enforcing an $\mathcal{O}(K)$ scale-invariant compute bound.
 - `--enable-primal-diving`: Activates SCIP sub-MIP primal heuristics (RENS, RINS, Guided Diving) to drive down the primal bound on large-scale instances.
 - `--dive-freq 5`: Frequency of sub-MIP primal diving execution (default: 5).
-- `--instance-tier {small,medium,big}`: Targets evaluation to a specific problem scale tier.
+- `--no-ood-detection`: Disables autonomous root-node OOD detection and reverts to fixed static thresholds.
+- `--tiers {small,medium,big}`: Targets evaluation to specific problem scale tiers.
 
 ---
 

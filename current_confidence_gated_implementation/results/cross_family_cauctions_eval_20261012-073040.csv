@@ -1,0 +1,5 @@
+instance_id,system,nnodes,stime,walltime,gap,status,fallback_rate,total_decisions,gnn_decisions,fallback_decisions
+1,SCIP_Default,11,1.86,1.9804964879949694,0.0,optimal,0.0,0,0,0
+1,Pure_GNN_ZeroShot,239,20.0,3.4172559959988575,0.016151922544196767,timelimit,0.0,175,175,0
+1,Fixed_Gated_NoOOD,275,7.14,1.2559624380010064,0.0,optimal,90.51094890510949,137,13,124
+1,Adaptive_OOD_PhaseA,228,5.22,0.9075477490041521,0.0,optimal,100.0,115,0,115

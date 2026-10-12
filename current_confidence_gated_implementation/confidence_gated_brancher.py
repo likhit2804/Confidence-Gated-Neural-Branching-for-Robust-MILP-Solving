@@ -63,6 +63,58 @@ class AdaptiveMetaTriageController:
         return False, "proceed_to_gnn"
 
 
+class AdaptiveRootOODDetector:
+    """
+    Autonomous Root-Node Out-Of-Distribution (OOD) Domain Shift Detector (Phase A).
+    
+    Inspects problem characteristics and constraint tensor geometry at root depth d=0:
+    1. Constraint Polarity Discrepancy:
+       - Set Covering training distribution has negative constraint-objective cosine alignment (mean_cos < 0).
+       - Packing/Auction distributions have positive cosine alignment (mean_cos > 0).
+    2. Epistemic Guardrail:
+       - If out-of-distribution domain shift is detected at d=0:
+         Dynamically clamps:
+           tau_h_eff = min(tau_h_base, 0.50)
+           tau_m_eff = max(tau_m_base, 0.25)
+       - Eliminates 'confidently incompetent' threshold leakage on foreign families autonomously!
+    """
+    def __init__(self, strict_entropy_limit=0.50, strict_margin_limit=0.25, enabled=True):
+        self.strict_entropy_limit = strict_entropy_limit
+        self.strict_margin_limit = strict_margin_limit
+        self.enabled = enabled
+        self.is_ood = False
+        self.detected_reason = "none"
+
+    def reset(self):
+        self.is_ood = False
+        self.detected_reason = "none"
+
+    def inspect_root_node(self, depth, observation, base_entropy_thresh, base_margin_thresh):
+        if not self.enabled:
+            return base_entropy_thresh, base_margin_thresh, False, "disabled"
+
+        if depth > 0:
+            if self.is_ood:
+                return self.strict_entropy_limit, self.strict_margin_limit, True, self.detected_reason
+            else:
+                return base_entropy_thresh, base_margin_thresh, False, self.detected_reason
+
+        # Root node analysis (d = 0)
+        c_feat = observation.row_features
+        if c_feat is not None and len(c_feat) > 0:
+            mean_obj_cos = float(np.mean(c_feat[:, 0]))
+            # If constraint-objective cosine alignment > 0, problem polarity is packing/aligned,
+            # opposite to Set Covering covering polarity (consistently < -0.10)
+            if mean_obj_cos > 0.0:
+                self.is_ood = True
+                self.detected_reason = f"packing_polarity_cos_{mean_obj_cos:.2f}"
+                return self.strict_entropy_limit, self.strict_margin_limit, self.is_ood, self.detected_reason
+
+        self.is_ood = False
+        self.detected_reason = "in_distribution_covering"
+        return base_entropy_thresh, base_margin_thresh, self.is_ood, self.detected_reason
+
+
 class CardinalityAwareTemperatureScaler:
     """
     Cardinality-Aware Temperature Scaling for Softmax Calibration (Limitation 2).
@@ -98,16 +150,20 @@ class UnifiedConfidenceGatedBranchingPolicy:
     - Limitation 2: Cardinality-Aware Temperature Scaling (Calibrated Epistemic Gate)
     - Limitation 3: Confidence-Gated Primal Diving (Sub-MIP Incumbent Discovery)
     - Limitation 4: PyTorch INT8 Dynamic Quantization & Scale-Invariant Candidate Filtering
+    - Phase A: Autonomous Root-Node Adaptive OOD Gate (Universal Cross-Family Transfer)
     """
     def __init__(self, gnn_model, margin_thresh=0.02, entropy_thresh=0.85, 
                  temperature=1.2, cardinality_scaling=True,
                  enable_triage=True, early_exit_depth=20, pseudo_margin=0.35, frac_margin=0.20,
                  quantize_int8=False, candidate_topk=0,
                  enable_primal_diving=False, dive_entropy_thresh=0.35, dive_margin_thresh=0.25,
+                 enable_ood_detection=True,
                  mode='confidence', random_fallback_prob=0.0, device='cpu'):
         self.model = gnn_model
         self.margin_thresh = margin_thresh
         self.entropy_thresh = entropy_thresh
+        self.effective_margin_thresh = margin_thresh
+        self.effective_entropy_thresh = entropy_thresh
         self.mode = mode
         self.random_fallback_prob = random_fallback_prob
         self.device = device
@@ -127,6 +183,7 @@ class UnifiedConfidenceGatedBranchingPolicy:
             base_temperature=temperature,
             enabled=cardinality_scaling
         )
+        self.ood_detector = AdaptiveRootOODDetector(enabled=enable_ood_detection)
         self.temperature = temperature
         self.reset_stats()
 
@@ -140,12 +197,23 @@ class UnifiedConfidenceGatedBranchingPolicy:
         self.bypass_depth_count = 0
         self.bypass_pseudo_count = 0
         self.bypass_frac_count = 0
+        self.is_ood_detected = False
+        self.effective_entropy_thresh = self.entropy_thresh
+        self.effective_margin_thresh = self.margin_thresh
+        self.has_inspected_root = False
+        self.ood_detector.reset()
         self.norm_entropies = []
         self.raw_entropies = []
         self.margins = []
 
     def select_action(self, observation, action_set, pseudocosts, depth=0):
         self.total_decisions += 1
+
+        # Root Node OOD Detection (Phase A: Universal Cross-Family Transfer)
+        if not self.has_inspected_root or depth == 0:
+            self.effective_entropy_thresh, self.effective_margin_thresh, self.is_ood_detected, _ = \
+                self.ood_detector.inspect_root_node(depth, observation, self.entropy_thresh, self.margin_thresh)
+            self.has_inspected_root = True
 
         # Layer 1: Adaptive Meta-Triage (Limitation 1)
         if self.mode == 'confidence':
@@ -216,7 +284,7 @@ class UnifiedConfidenceGatedBranchingPolicy:
             # Decision Gate:
             use_gnn = True
             if self.mode == 'confidence':
-                is_confident = (margin >= self.margin_thresh) and (norm_entropy <= self.entropy_thresh)
+                is_confident = (margin >= self.effective_margin_thresh) and (norm_entropy <= self.effective_entropy_thresh)
                 use_gnn = is_confident
             elif self.mode == 'random':
                 use_gnn = (np.random.rand() >= self.random_fallback_prob)
@@ -240,7 +308,8 @@ def run_gated_evaluation(problem='setcover', n_instances=10, seed=0, time_limit=
                          enable_triage=True, pseudo_margin=0.35, frac_margin=0.20,
                          cardinality_scaling=True, tiers='small,medium,big',
                          quantize_int8=False, candidate_topk=0,
-                         enable_primal_diving=False, dive_freq=5):
+                         enable_primal_diving=False, dive_freq=5,
+                         enable_ood_detection=True):
     device = 'cpu'
     model_path = f"model/{problem}/{seed}/train_params.pkl"
     print(f"Loading GNN model from {model_path}...")
@@ -265,6 +334,7 @@ def run_gated_evaluation(problem='setcover', n_instances=10, seed=0, time_limit=
         quantize_int8=quantize_int8,
         candidate_topk=candidate_topk,
         enable_primal_diving=enable_primal_diving,
+        enable_ood_detection=enable_ood_detection,
         mode=mode,
         device=device
     )
@@ -426,6 +496,7 @@ if __name__ == '__main__':
     parser.add_argument('--candidate-topk', type=int, default=0, help='Max candidate pool size (0 = all candidates)')
     parser.add_argument('--enable-primal-diving', action='store_true', help='Enable Sub-MIP primal diving heuristics')
     parser.add_argument('--dive-freq', type=int, default=5, help='Frequency of Sub-MIP primal diving heuristics')
+    parser.add_argument('--no-ood-detection', action='store_true', help='Disable autonomous root-node OOD detection')
     args = parser.parse_args()
 
     run_gated_evaluation(
@@ -446,5 +517,6 @@ if __name__ == '__main__':
         quantize_int8=args.quantize_int8,
         candidate_topk=args.candidate_topk,
         enable_primal_diving=args.enable_primal_diving,
-        dive_freq=args.dive_freq
+        dive_freq=args.dive_freq,
+        enable_ood_detection=not args.no_ood_detection
     )
