@@ -61,7 +61,7 @@ Despite promising theoretical reductions in search tree nodes, deploying deep ne
 
 \begin{enumerate}
     \item \textbf{Inference Latency Sunk Cost:} Simplex pivots and classical heuristics such as Reliable Pseudocosts (`relpscost`) execute in $<0.05\,\text{ms}$ on CPU, whereas evaluating a 2-layer GCNN requires $15\text{--}40\,\text{ms}$~\cite{gasse2019exact,nair2020solving}. At shallow or trivial nodes where classical rules make effective choices instantly, running graph convolutions unconditionally incurs massive wall-clock penalties.
-    \item \textbf{Compounding Covariate Shift ($O(T^2)$ Error):} Sequential decision-making under supervised imitation learning suffers from compounding error over tree depth $T$~\cite{ross2011reduction,scavuzzo2022learning}. Once the neural policy makes a single suboptimal branch, the solver enters an unexplored state distribution where neural outputs become highly degraded, precipitating catastrophic search tree bloat~\cite{bengio2021machine,gupta2022lookback}.
+    \item \textbf{Compounding Covariate Shift ($\mathcal{O}(T^2)$ Error):} Sequential decision-making under supervised imitation learning suffers from compounding error over tree depth $T$~\cite{ross2011reduction,scavuzzo2022learning}. Once the neural policy makes a single suboptimal branch, the solver enters an unexplored state distribution where neural outputs become highly degraded, precipitating catastrophic search tree bloat~\cite{bengio2021machine,gupta2022lookback}.
     \item \textbf{Candidate Cardinality Distortion:} The set of fractional variables $|\mathcal{C}_t|$ varies dynamically throughout the search tree ($10 \le |\mathcal{C}_t| \le 2,000$). Standard softmax distributions over fluctuating candidate sizes suffer from severe entropy scaling artifacts, rendering fixed confidence thresholds invalid when scaling from small to large problem instances~\cite{guo2017calibration}.
     \item \textbf{Cross-Family Out-of-Distribution Vulnerability:} GCNN policies trained on one problem family (e.g., Set Covering) learn structural inductive biases tied to constraint geometries. When deployed zero-shot on foreign families (e.g., Combinatorial Auctions or Facility Location), uncalibrated softmax logits exhibit false certainty, causing search tree explosions up to $36\times$ larger than classical defaults.
 \end{enumerate}
@@ -73,7 +73,7 @@ To resolve these foundational vulnerabilities, we propose \textbf{Confidence-Gat
     \item \textbf{Multi-Layer Adaptive Meta-Triage:} A 4-layer controller that inspects candidate cardinality, tree depth saturation ($d > 20$), LP fractionality topology, and pseudocost relative margins, safely bypassing GNN forward passes in $<1\,\mu\text{s}$ at decisive nodes.
     \item \textbf{Receptive Field Equivariance Theorem \& Proof:} We formally prove that for any 2-layer bipartite GCNN, candidate logits depend strictly on the 2-hop bipartite ego-subgraph centered on the candidate pool $\mathcal{C}_t$. This establishes exact mathematical equivariance ($\Delta < 2.98 \times 10^{-7}$) while eliminating $33.7\%$ of forward latency.
     \item \textbf{Autonomous Root-Node Adaptive OOD Gate:} An unsupervised polarity alignment detector that inspects constraint-objective cosine alignment at $d=0$, autonomously identifying domain shift and clamping gating thresholds to prevent catastrophic failure on packing and facility location problems.
-    \item \textbf{Primal Diving & Quantization Synergy:} Integration of confidence-gated sub-MIP primal diving (RENS/RINS) with PyTorch INT8 dynamic quantization and top-$K$ candidate truncation.
+    \item \textbf{Primal Diving \& Quantization Synergy:} Integration of confidence-gated sub-MIP primal diving (RENS/RINS) with PyTorch INT8 dynamic quantization and top-$K$ candidate truncation.
     \item \textbf{Rigorous DeepMind Metric Evaluation:} Evaluation under the Nair et al.~\cite{nair2020solving} statistical protocol (PAR-10, SGM runtime, SGM nodes, and Primal-Dual gap) demonstrating Pareto dominance over pure GNN and classical SCIP baselines.
 \end{itemize}
 
@@ -302,7 +302,39 @@ This forces $100\%$ fallback to SCIP pseudocosts on foreign distributions, preve
 \subsection{Primal Diving Integration}
 To combat primal-dual asymmetry on large instances, we couple confidence gating with sub-MIP primal diving (RENS/RINS). At periodic search depths (frequency = 5), when average branching confidence is high ($\tilde{H} \le 0.60$), the solver fixes fractional variables with $x_j^* \ge 0.90$ and invokes SCIP's internal sub-MIP heuristic. This discovers early incumbent integer solutions, pruning subtrees that would otherwise time out.
 
-\input{table1_multitier_ablation.tex}
+% Table 1: Multi-Tier Architectural Ablation on Set Covering Benchmarks
+\begin{table*}[t]
+\centering
+\caption{\textbf{Multi-Tier Performance on Benchmark Set Covering Instances} ($180\,\text{s}$ time limit). Comparing classical SCIP, Pure GNN baseline, original Confidence-Gated policy, Unified 4-Pillar solver, and the Full-Stack Flagship engine (incorporating all 6 pillars and runtime enhancements).}
+\label{tab:multitier_ablation}
+\small
+\resizebox{\textwidth}{!}{
+\begin{tabular}{llcccccc}
+\toprule
+\textbf{Instance Tier} & \textbf{Solver Architecture} & \textbf{Solved Rate} & \textbf{Mean Walltime} & \textbf{SGM Time ($s{=}1$)} & \textbf{SGM Nodes ($s{=}10$)} & \textbf{PAR-10} & \textbf{Timeout Gap} \\
+\midrule
+\multirow{5}{*}{\textbf{Small Tier}} 
+ & SCIP Default (relpscost) & 10 / 10 (100\%) & 7.24\,s & 6.89\,s & 58.2 & 7.24\,s & 0.00\% \\
+ & Pure GNN (Ecole GCNN) & 8 / 10 (80\%) & 16.51\,s & 13.40\,s & 212.4 & 373.21\,s & 2.15\% \\
+ & Confidence-Gated (Base) & 10 / 10 (100\%) & 13.14\,s & 11.82\,s & 305.6 & 13.14\,s & 0.00\% \\
+ & Unified 4-Pillar Flagship & 10 / 10 (100\%) & 5.98\,s & 5.41\,s & 294.1 & 5.98\,s & 0.00\% \\
+ & \textbf{Full-Stack Flagship (Ours)} & \textbf{10 / 10 (100\%)} & \textbf{6.94\,s} & \textbf{6.58\,s} & \textbf{220.8} & \textbf{6.94\,s} & \textbf{0.00\%} \\
+\midrule
+\multirow{5}{*}{\textbf{Medium Tier}} 
+ & SCIP Default (relpscost) & 9 / 10 (90\%) & 66.11\,s & 31.43\,s & 4682.6 & 239.50\,s & 1.84\% \\
+ & Pure GNN (Ecole GCNN) & 0 / 10 (0\%) & 180.00\,s & 180.00\,s & 351.5 & 1800.00\,s & 36.87\% \\
+ & Confidence-Gated (Base) & 2 / 10 (20\%) & 152.30\,s & 142.10\,s & 325.8 & 1475.23\,s & 14.72\% \\
+ & Unified 4-Pillar Flagship & 7 / 10 (70\%) & 74.20\,s & 48.15\,s & 2740.1 & 592.10\,s & 4.12\% \\
+ & \textbf{Full-Stack Flagship (Ours)} & \textbf{7 / 10 (70\%)} & \textbf{68.10\,s} & \textbf{42.86\,s} & \textbf{2655.3} & \textbf{557.97\,s} & \textbf{3.79\%} \\
+\midrule
+\multirow{3}{*}{\textbf{Big Tier}} 
+ & SCIP Default (relpscost) & 0 / 10 (0\%) & 180.00\,s & 180.00\,s & 7444.8 & 1800.00\,s & 183.59\% \\
+ & Pure GNN (Ecole GCNN) & 0 / 10 (0\%) & 180.00\,s & 180.00\,s & 156.8 & 1800.00\,s & 46.18\% \\
+ & \textbf{Full-Stack Flagship (Ours)} & \textbf{0 / 5 (Timeouts)} & \textbf{33.19\,s} & \textbf{33.01\,s} & \textbf{43.4} & \textbf{600.00\,s} & \textbf{19.39\%} \\
+\bottomrule
+\end{tabular}
+}
+\end{table*}
 
 \section{Empirical Evaluation}
 
@@ -325,7 +357,30 @@ Table~\ref{tab:multitier_ablation} reports comprehensive performance across 30 i
     \item \textbf{Big Tier ($2,000\text{r} \times 1,000\text{c}$):} $4\times$ size shift ($118\text{k}$ edges). All systems hit the $180\,\text{s}$ limit. However, Pure GNN suffers a $46.18\%$ optimality gap, whereas our framework prunes search trees by $170\times$ vs SCIP ($43.4$ vs $7,445$ nodes) and shrinks timeout gap to $19.39\%$.
 \end{itemize}
 
-\input{table2_cross_family.tex}
+% Table 2: Cross-Family Zero-Shot Generalization & Autonomous OOD Clamping
+\begin{table*}[t]
+\centering
+\caption{\textbf{Zero-Shot Cross-Family Generalization and Autonomous OOD Guardrails.} Evaluating policies trained exclusively on Set Covering ($500\,\text{r}$) across out-of-distribution problem families with distinct constraint tensor polarities.}
+\label{tab:cross_family}
+\small
+\begin{tabular}{llccccc}
+\toprule
+\textbf{Target Problem Family} & \textbf{Evaluation Policy} & \textbf{Root Polarity} & \textbf{OOD Flagged} & \textbf{Mean Time} & \textbf{B\&B Nodes} & \textbf{Optimality Gap} \\
+\midrule
+\multirow{4}{*}{\textbf{Combinatorial Auction}}
+ & SCIP Default (relpscost) & $\mu_{\text{cos}} = +0.45$ & N/A & 1.98\,s & 11 & 0.0000 (Optimal) \\
+ & Pure GNN (Zero-Shot) & $\mu_{\text{cos}} = +0.45$ & False & 3.42\,s & 239 & 0.0162 (Timeout) \\
+ & Fixed Gated ($\tau_h{=}0.85$) & $\mu_{\text{cos}} = +0.45$ & False & 1.26\,s & 275 & 0.0000 (Optimal) \\
+ & \textbf{Adaptive OOD Gate (Phase A)} & $\mu_{\text{cos}} = +0.45$ & \textbf{True} & \textbf{0.91\,s} & \textbf{228} & \textbf{0.0000 (Optimal)} \\
+\midrule
+\multirow{4}{*}{\textbf{Capacitated Facility Location}}
+ & SCIP Default (relpscost) & $\mu_{\text{cos}} = +0.12$ & N/A & 0.31\,s & 5 & 0.0000 (Optimal) \\
+ & Pure GNN (Zero-Shot) & $\mu_{\text{cos}} = +0.12$ & False & 0.04\,s & 3 & 0.0000 (Optimal) \\
+ & Fixed Gated ($\tau_h{=}0.85$) & $\mu_{\text{cos}} = +0.12$ & False & 0.04\,s & 5 & 0.0000 (Optimal) \\
+ & \textbf{Adaptive OOD Gate (Phase A)} & $\mu_{\text{cos}} = +0.12$ & \textbf{True} & \textbf{0.03\,s} & \textbf{5} & \textbf{0.0000 (Optimal)} \\
+\bottomrule
+\end{tabular}
+\end{table*}
 
 \subsection{Cross-Family Zero-Shot Transfer}
 To evaluate robustness under distribution shift, we deploy the policy—trained strictly on Set Covering—zero-shot on foreign MILP families in Table~\ref{tab:cross_family}:
@@ -334,9 +389,25 @@ To evaluate robustness under distribution shift, we deploy the policy—trained 
     \item \textbf{Capacitated Facility Location (100 Facilities, 100 Customers):} Cornu{\'e}jols formulation~\cite{cornuejols1991comparison} ($\mu_{\text{cos}} = +0.12$). The adaptive detector flags OOD and safely achieves optimal solves in $0.03\,\text{s}$ with 5 nodes.
 \end{itemize}
 
-\input{table3_latency_profile.tex}
+% Table 3: Latency & Graph Sparsification Breakdown
+\begin{table}[t]
+\centering
+\caption{\textbf{Candidate-Centric Ego-Subgraph Sparsification \& INT8 Latency Profiling} on Big Tier Set Covering ($2,000\,\text{r} \times 1,000\,\text{c}$, $\approx 118,000$ bipartite edges) with Top-50 Candidate Truncation.}
+\label{tab:latency_profile}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Inference Configuration} & \textbf{Active Constraints} & \textbf{Active Bipartite Edges} & \textbf{Forward Latency (ms)} \\
+\midrule
+Global FP32 Inference & 2,018 & 117,868 & 211.03\,ms \\
+Global INT8 Dynamic Quantization & 2,018 & 117,868 & 168.42\,ms \\
+Candidate Ego-Subgraph (FP32) & 1,907 ($-5.5\%$) & 112,473 ($-4.6\%$) & 139.89\,ms ($-33.7\%$) \\
+\textbf{Candidate Ego-Subgraph (INT8, Ours)} & \textbf{1,907} & \textbf{112,473} & \textbf{98.54\,ms ($-53.3\%$)} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsection{Latency Profiling & Graph Sparsification}
+\subsection{Latency Profiling \& Graph Sparsification}
 Table~\ref{tab:latency_profile} breaks down per-node inference latencies on Big Tier instances ($2,000\text{r} \times 1,000\text{c}$, $\approx 118\text{k}$ edges):
 \begin{itemize}
     \item \textbf{Global FP32 vs INT8:} Dynamic quantization reduces forward latency from $211.03\,\text{ms}$ to $168.42\,\text{ms}$ ($-20.2\%$).
@@ -358,7 +429,7 @@ To dissect the individual contributions of our six pillars, we conducted a syste
     \item \textbf{Impact of OOD Clamping:} Prevented $100\%$ of catastrophic threshold leakage failures on Combinatorial Auction instances without human flag tuning.
 \end{enumerate}
 
-\section{Discussion & Theoretical Insights}
+\section{Discussion \& Theoretical Insights}
 
 \subsection{Mitigating Compounding Imitation Errors}
 Supervised imitation learning algorithms in sequential environments inevitably deviate from expert trajectories~\cite{ross2011reduction,bengio2021machine}. When a pure GNN policy makes an initial suboptimal branching decision near the root of the B\&B tree, the downstream search tree diverges into subproblems never observed during training. Because the neural policy lacks a self-assessment mechanism, it continues making degraded predictions, causing tree size to explode exponentially.
@@ -368,7 +439,7 @@ By enforcing the dual gating condition ($\tilde{H} \le \tau_h \land \Delta p \ge
 \subsection{Locality and Sparsity in MILP Bipartite Graphs}
 Theorem~\ref{thm:equivariance} reveals that deep graph convolution in 2-layer GCNNs possesses strict finite spatial support. While whole-graph message passing has been standard practice in ML4CO~\cite{gasse2019exact,prouvost2020ecole}, our result proves that constraints and variables beyond 2 hops from the fractional boundary have zero algebraic influence on candidate branching logits. By pruning non-essential vertices before convolution, solvers achieve substantial speedups without heuristic approximation.
 
-\section{Limitations & Research Roadmap}
+\section{Limitations \& Research Roadmap}
 While our framework establishes state-of-the-art robustness, several engineering and scientific frontiers remain open:
 \begin{enumerate}
     \item \textbf{Memory Marshalling Overhead:} Ego-subgraph extraction is currently implemented in vectorized NumPy on CPU ($~5.8\,\text{ms}$ on 100k edges). Compiling bipartite 2-hop extraction into fused C++/CUDA kernels within PyG or TorchScript would reduce preprocessing latency to $<0.5\,\text{ms}$.
@@ -379,7 +450,114 @@ While our framework establishes state-of-the-art robustness, several engineering
 \section{Conclusion}
 Confidence-Gated Neural Branching bridges the divide between deep combinatorial learning and robust solver engineering. By marrying scale-invariant epistemic uncertainty quantification with candidate-centric ego-subgraph equivariance, multi-layer meta-triage, and autonomous root-node domain shift guardrails, our framework eliminates the primary failure modes of neural branching. It provides provable mathematical safety nets under distribution shift while delivering substantial wall-clock speedups on large-scale combinatorial optimization problems.
 
-\bibliographystyle{plain}
-\bibliography{references}
+% Single-File Embedded Self-Contained Bibliography
+\begin{thebibliography}{99}
+
+\bibitem{achterberg2005branching}
+T.~Achterberg, T.~Koch, and A.~Martin.
+\newblock Branching rules revisited.
+\newblock {\em Operations Research Letters}, 33(1):42--54, 2005.
+
+\bibitem{alvarez2017machine}
+A.~M. Alvarez, Q.~Louveaux, and L.~Wehenkel.
+\newblock A machine learning approach for strong branching.
+\newblock {\em arXiv preprint arXiv:1709.04787}, 2017.
+
+\bibitem{bengio2021machine}
+Y.~Bengio, A.~Lodi, and A.~Prouvost.
+\newblock Machine learning for combinatorial optimization: a methodological tour d'horizon.
+\newblock {\em European Journal of Operational Research}, 290(2):405--421, 2021.
+
+\bibitem{berthold2014rens}
+T.~Berthold.
+\newblock {RENS}---relaxation enforced neighborhood search.
+\newblock {\em Mathematical Programming Computation}, 6(1):33--48, 2014.
+
+\bibitem{chow1970optimum}
+C.~Chow.
+\newblock On optimum recognition error and reject tradeoff.
+\newblock {\em IEEE Transactions on Information Theory}, 16(1):41--46, 1970.
+
+\bibitem{cornuejols1991comparison}
+G.~Cornu{\'e}jols, R.~Sridharan, and J.-M. Thizy.
+\newblock A comparison of heuristics and relaxations for the capacitated plant location problem.
+\newblock {\em European Journal of Operational Research}, 50(3):280--297, 1991.
+
+\bibitem{danna2005rins}
+E.~Danna, E.~Rothberg, and C.~Le~Pape.
+\newblock Exploring relaxation induced neighborhoods to improve {MIP} solutions.
+\newblock {\em Mathematical Programming}, 102(1):71--90, 2005.
+
+\bibitem{gamrath2020scip}
+G.~Gamrath, D.~Anderson, K.~Bestuzheva, W.-K. Chen, L.~Eifler, T.~Gally, A.~Gazzouz, A.~Gleixner, R.~Gottwald, G.~Hendel, et~al.
+\newblock The {SCIP} Optimization Suite 7.0.
+\newblock {\em Optimization Online}, 2020.
+
+\bibitem{gasse2019exact}
+M.~Gasse, D.~Ch{\'e}telat, N.~Ferroni, L.~Charlin, and A.~Lodi.
+\newblock Exact combinatorial optimization with graph convolutional neural networks.
+\newblock In {\em Advances in Neural Information Processing Systems (NeurIPS)}, volume~32, pages 15554--15566, 2019.
+
+\bibitem{geifman2019selectivenet}
+Y.~Geifman and R.~El-Yaniv.
+\newblock {SelectiveNet}: A deep neural network with an integrated reject option.
+\newblock In {\em International Conference on Machine Learning (ICML)}, pages 2151--2159, 2019.
+
+\bibitem{guo2017calibration}
+C.~Guo, G.~Pleiss, Y.~Sun, and K.~Q. Weinberger.
+\newblock On calibration of modern neural networks.
+\newblock In {\em International Conference on Machine Learning (ICML)}, pages 1321--1330, 2017.
+
+\bibitem{gupta2020hybrid}
+P.~Gupta, M.~Gasse, E.~B. Khalil, P.~Mudigonda, A.~Lodi, and Y.~Bengio.
+\newblock Hybrid models for learning to branch.
+\newblock In {\em Advances in Neural Information Processing Systems (NeurIPS)}, volume~33, pages 18087--18097, 2020.
+
+\bibitem{gupta2022lookback}
+P.~Gupta, E.~B. Khalil, D.~Ch{\'e}telat, M.~Gasse, Y.~Bengio, A.~Lodi, and M.~P. Kumar.
+\newblock Lookback for learning to branch.
+\newblock {\em Transactions on Machine Learning Research (TMLR)}, 2022.
+
+\bibitem{joshi2009multi}
+A.~J. Joshi, F.~Porikli, and N.~Papanikolopoulos.
+\newblock Multi-class active learning for image classification.
+\newblock In {\em IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, pages 2372--2379, 2009.
+
+\bibitem{khalil2016learning}
+E.~B. Khalil, P.~Le~Bodic, L.~Song, G.~Nemhauser, and B.~Dilkina.
+\newblock Learning to branch in mixed integer programming.
+\newblock In {\em AAAI Conference on Artificial Intelligence}, volume~30, pages 724--731, 2016.
+
+\bibitem{madras2018predictive}
+D.~Madras, T.~Pitassi, and R.~Zemel.
+\newblock Predictor-rejector: Learning to defer to an expert.
+\newblock In {\em Advances in Neural Information Processing Systems (NeurIPS)}, volume~31, 2018.
+
+\bibitem{nair2020solving}
+V.~Nair, S.~Bartunov, F.~Gimeno, I.~von Glehn, P.~Lichocki, I.~Lobov, B.~O'Donoghue, N.~Sonnerat, C.~Tjandraatmadja, P.~Wang, et~al.
+\newblock Solving mixed integer programs using neural networks.
+\newblock {\em arXiv preprint arXiv:2012.13349}, 2020.
+
+\bibitem{prouvost2020ecole}
+A.~Prouvost, J.~Dumouchelle, L.~Scavuzzo, M.~Gasse, D.~Ch{\'e}telat, and A.~Lodi.
+\newblock Ecole: A gym-like library for machine learning in combinatorial optimization.
+\newblock {\em arXiv preprint arXiv:2011.06069}, 2020.
+
+\bibitem{ross2011reduction}
+S.~Ross, G.~Gordon, and D.~Bagnell.
+\newblock A reduction of imitation learning and structured prediction to no-regret online learning.
+\newblock In {\em International Conference on Artificial Intelligence and Statistics (AISTATS)}, pages 627--635, 2011.
+
+\bibitem{scavuzzo2022learning}
+L.~Scavuzzo, F.~Chen, D.~Ch{\'e}telat, M.~Gasse, A.~Lodi, N.~Yorke-Smith, and K.~Aardal.
+\newblock Learning to branch with tree {MDPs}.
+\newblock In {\em Advances in Neural Information Processing Systems (NeurIPS)}, volume~35, pages 18455--18467, 2022.
+
+\bibitem{scavuzzo2024machine}
+L.~Scavuzzo, K.~Aardal, A.~Lodi, and N.~Yorke-Smith.
+\newblock Machine learning augmented branch and bound for mixed integer linear programming.
+\newblock {\em arXiv preprint arXiv:2402.04024}, 2024.
+
+\end{thebibliography}
 
 \end{document}
